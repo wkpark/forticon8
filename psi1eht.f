@@ -1,0 +1,833 @@
+C       ***********************************************************
+C       ********************  PSI/77 - PART 1  ********************
+C       ***********************************************************
+C
+C       WILLIAM L. JORGENSEN
+C       PURDUE UNIVERSITY, DEPARTMENT OF CHEMISTRY
+C       WEST LAFAYETTE, INDIANA 47907, USA
+C       PHONE 317-494-8824
+C
+C        PROGRAM HAS BEEN MODIFIED TO PRODUCE D TYPE ORBITALS.
+C        EIGENVECTORS FROM EHT CALCULATION ARE REQUIRED.
+C        ORBITALS ARE IN THE ORDER OF D(Z**2,XZ,YZ,X**2-Y**2,XY)
+C
+C        J. GAO, JAN., 1986
+C
+      COMMON /RPLOT/ N,CO(3),CM,THE,GAM,PHI,X(850),Y(850),Z(850),IDASH,
+     *   SCALE,PERZ,KA,KO,ZO
+      COMMON /HLCOM/ NAC(850),NC,NCURV,NCDASH(850)
+      COMMON /IO/ IRD,ILST,IDSK1,IDSK2,IDSK3
+C
+C       THIS PROGRAM ACCEPTS A WAVEFUNCTION AND DETERMINES
+C       ELECTRON DENSITY OR ORBITAL VALUES IN THE PLANES
+C       WHICH ARE SPECIFIED, THE EIGENVECTORS AND MOLECULAR
+C       COORDINATES ARE READ FROM DISK FILE 21 OR MAY BE CARD INPUT.
+C       CLOSED CONTOURS AT THE SPECIFIED LEVEL(S)
+C       ARE DRAWN THROUGH THE DENSITY OR ORBITAL VALUE
+C       ARRAYS AND THE POINTS(IN ANGSTROMS) FOR EACH CONTOUR ARE STORED
+C       AS OUTPUT IN DISK FILE 22. THE TOTAL
+C       NUMBER OF POINTS AND THE NUMBER OF CURVES ALONG
+C       WITH THE NUMBER OF POINTS IN EACH CURVE AND AN
+C       INDICATOR FOR WHETHER THE CONTOUR LEVEL IS POSITIVE
+C       OR NEGATIVE ARE STORED IN THE OUTPUT DISK FILE
+C       23. FOR PROPER HIDDEN LINE ELIMINATION
+C       IN THE 3-D DRAWING PROGRAM, IT IS ESSENTIAL THAT ALL CONTOURS
+C       WHICH ARE CONSTRUCTED BE CLOSED. IF THIS CONDITION IS NOT MET,
+C       AN ERROR MESSAGE IS PRINTED.
+C
+C       CARD INPUT IS DESCRIBED IN SUBROUTINE THREED.
+C
+C       NOT ALL OF THE VARIABLES IN COMMON/RPLOT ARE
+C       ESSENTIAL TO THIS PROGRAM, BUT HAVE BEEN RETAINED
+C       FOR COMPATIBILITY WITH THE HIDDEN LINE PLOTTING
+C       PROGRAM IN CASE THE TWO ARE MERGED
+C
+      IRD = 5
+      ILST = 6
+      IDSK1 = 22
+      IDSK2 = 23
+      IDSK3 = 21
+      THE = 0.
+      GAM = 0.
+      PHI = 0.
+      NC = 0
+      NCURV = 0
+C
+C       MAKE 3-D CONTOUR MAP
+C
+      CALL THREED
+C
+C       AFTER THE CURVES HAVE BEEN CREATED THE POINT AND
+C       CURVE TOTAL INFORMATION IS STORED IN THE FILE, POINT
+C
+      STOP
+	END
+      SUBROUTINE THREED
+C
+C       PROGRAM TO PLOT VALENCE SHELL
+C       OR CHARGE DENSITIES IN 2 OR 3 DIMENSIONS FOR ATOMS H - AR
+C       W.L. JORGENSEN   -   12/19/71, MAJOR REVISION 5/15/77
+C
+C       THIS VERSION ONLY WORKS FOR EHT AND EHT(N3D) TYPES
+C       JOHN NASH - 4/28/90
+C
+      parameter (MXPTS=41)
+      CHARACTER CALC*6,AUTO*4
+      INTEGER WFTYP
+      COMMON /RPLOT/ NNN,CO(3),CM,THE,GAM,PHI,XX,YY,ZZ,IDASH,SCALE,PERZ,
+     *   KA,KO,ZZZ
+      COMMON /HLCOM/ NAC(850),NC,NCURV,NCDASH(850)
+      COMMON /IO/ IRD,ILST,IDSK1,IDSK2,IDSK3
+      COMMON /DENS/ DENS(MXPTS,MXPTS,MXPTS),CONTR(100),RAD(100)
+     * ,RNORM(100),V(100,100),C(50,3),IAN(49),RCUT(18),OCMO(100)
+      COMMON /MINMAX/ XMIN,XMAX,YMIN,YMAX,ZMIN,ZMAX
+      COMMON /SPLIT/ XMI,YMI,ZMI,XINC,YINC,ZINC,MONE,MOLAST
+     *   ,NORB,NOCUT,NAT
+      COMMON /EHT/ Z1S(18),Z2SP(18),Z3S(8),Z3P(8),Z3D(8)
+      DIMENSION ZO(31),Z1(31),XX(850),YY(850),ZZ(850),CMIN(3),CMAX(3)
+      DIMENSION CTR(15),SAV(MXPTS,MXPTS)
+C
+C       SLATER EXPONENTS ARE FROM HOFFMANN + SUMMERVILLE, JACS, 1976.
+C
+      DATA Z1S / 1.3,1.7,2.7,3.7,4.7,5.7,6.7,7.7,8.7,9.7,10.7,11.7,12.7,
+     *   13.7,14.7,15.7,16.7,17.7 /
+      DATA Z2SP / 0.0,0.0,0.65,0.975,1.3,1.625,1.95,2.275,2.425,2.925,
+     *   3.425,3.925,4.425,4.925,5.425,5.925,6.425,6.925 /
+      DATA Z3S / 0.733,0.95,1.167,1.383,1.75,2.122,2.183,2.25 /
+      DATA Z3P / 0.733,0.95,1.167,1.383,1.30,1.827,1.733,2.25 /
+      DATA Z3D / 0.0,0.0,0.0,1.383,1.40,1.50,2.033,0.0 /
+      DATA RCUT / 5.8,4.7,13.2,9.5,7.5,6.2,5.4,4.7,4.5,3.8,14.0,11.3,9.5
+     *   ,8.4,8.3,7.8,6.1,5.6 /
+      DATA AU,PI,RT3 / 0.529167,3.1415926536,1.7320508 /
+C
+C       V IS THE EIGENVECTOR MATRIX. DENS IS THE CHARGE DENSITY OR
+C       ORBITAL VALUE MATRIX. IAN IS THE ARRAY OF ATOMIC NUMBERS
+C       FOR THE ATOMS  WHOSE COORDINATES, READ IN IN ANGSTROMS, ARE IN
+C       C. CTR IS THE ARRAY OF CONTOUR LEVELS IN AU.
+C
+C       CARD INPUT IS AS FOLLOWS -
+C       CARD  1 - TYPE OF WAVEFUNCTION = EHT, EHT3D.(1A6)
+C                 EHT3D INCLUDES 3D ORBITALS ON SI, P, S, CL.
+C                 CC 6-9 = AUTO FOR AUTOMATIC DETERMINATION OF PLOTTING
+C                 PLANES AND LIMITS, ETC.  IF USED, NOW SKIP TO
+C                 AFTER CARD 9. THE OTHER PARAMETERS ON THIS CARD ARE
+C                 STILL ACTIVE.
+C                 CC 11-15 IRDPOP = INCREMENT BETWEEN PLANES IN ANGSTROMS
+C                 WHEN AUTO IS USED.
+C                 CC 16 IONEMO = 1 IF ONE MO ONLY IS TO BE CARD INPUT.
+C                 SEE BELOW FOR AO ORDER.
+C                 CC 17 NOCUT = 1 IF A CUTOFF OF 0.0005 AU IS NOT TO BE
+C                 USED IN EVALUATING AN AO. THIS SLOWS EXECUTION.
+C       CARD 2 -  X,Y AND NO. OF FIRST SET OF PLANES (=1 FOR 2-D) - 2A1,
+C          CC 5-6 = +1 OR -1 IF ORBITAL IS SYMMETRIC IN THE YZ PLANE
+C          - +1 FOR SYMMETRIC, -1 FOR ANTISYMMETRIC (OPTIONAL).
+C       CARD 3 - XMIN (=0 FOR AUTO SCALING) XMAX YMIN YMAX - 4F10.6
+C       CARD 4 - ZMIN ZMAX - 2F10.6
+C       CARD 5 - X',Y'AND NO. OF SECOND SET OF PLANES (=0 FOR 2-D) - 2A1
+C          CC 5-6 = +1 OR -1 IF ORBITAL IS SYMMETRIC IN THE YZ PLANE
+C          - +1 FOR SYMMETRIC, -1 FOR ANTISYMMETRIC (OPTIONAL).
+C       CARD 6 - X'MIN X'MAX Y'MIN Y'MAX (OMIT FOR 2-D) - 4F10.6
+C       CARD 7 - Z'MIN Z'MAX  (OMIT FOR 2-D) 2F10.6
+C       CARD 8 - NO. OF CONTOURS, ICONN, ICONZ, NORB  -4I2
+C         ICONN = 1 FOR NEGATIVE CONTOURS, TOO.
+C         ICONZ=1 FOR ZERO CONTOUR AND NORB=2 FOR CHARGE DENSITY PLOT.
+C       CARD 9 - CONTOUR LEVELS (ONLY POSITIVE NEED BE SPECIFIED WHEN
+C         ICONN AND ICONZ ARE USED - 8F10.6).
+C       ***IF IONEMO=1, THE GEOMETRY CARDS AND A 99 CARD FOLLOWED BY
+C       THE ONE MO TO BE PLOTTED (8F10.6) ARE INSERTED HERE ***
+C LAST  CARD   - FIRST MO TO BE  SUMMED, LAST MO, SCALE (FOR AUTO SCALE)
+C         - 2I2, F10.6 - MONE=MOLAST=0 FOR ALL OCCUPIED MO'S.
+C       FOR AN ORBITAL VALUE PLOT, MONE=MOLAST=THE NUMBER OF
+C       THE DESIRED MO. IF IONEMO=1, MONE=MOLAST=01.
+C
+C-----------------------------------------------------------------------
+C        WHEN TRANSITION ELEMENTS ARE INCLUDED IN YOUR MO PLOTS,
+C        USE ATOMIC NUMBER RANGING FROM 19-53 FOR EACH ATOM. THE AO
+C        COEFFICIENTS ARE TO BE READ IN FROM YOUR INFILE. FOR EACH
+C        TS METAL, ONE ADDITIONAL CARD FOLLOWING THE XYZ COORDINATE
+C        FOR THE TRANSITION METAL IS REQUIRED. THE FORMAT IS AS FOLLOW:
+C           A2     ATOMIC SYMBOL
+C           I3     NUMBER OF VALENCE ELECTRONS
+C           I3     PRINCIPAL QUANTUM NUMBER OF S SHELL
+C           F6.3   S SHELL EXPONENT
+C           I3     PRINCIPAL QUANTUM NUMBER FOR THE P SHELL
+C           F6.3   P SHELL EXPONENT
+C           I3     PRINCIPAL QUANTUM NUMBER FOR THE D SHELL
+C           F6.3   D SHELL EXPONENT 1
+C           F6.4   COEFFICIENT FOR THE FIRST D EXPONENT
+C           F6.3   D SHELL EXPONENT 2
+C           F6.4   COEFFICIENT FOR THE SECOND D EXPONENT
+C-----------------------------------------------------------------------
+C
+C       INITIALIZE FOR AUTOMATIC PROCESSING
+C
+      NCT = 1
+      CTR(1) = 0.075
+      NORB = 1
+      ICONN = 1
+      ICONZ = 0
+      XMIN = 0.0
+      X1MIN = 0.0
+      NZ = 0
+      NZ1 = 0
+      ISYM = 0
+      ISYM1 = 0
+      ISAV = 0
+      N3D = 0
+      CTRFACT = 1.0
+      READ (IRD,10) CALC,AUTO,IRDPOP,IONEMO,NOCUT
+	WRITE(*,*)' CALC,ETC ',CALC,AUTO,IRDPOP,IONEMO,NOCUT
+   10 FORMAT (1A6,1A4,1X,I1,4X,2I1)
+      IF (CALC.EQ.'EHT3D ') N3D = 1
+      IF (CALC.NE.'EHT   '.AND.CALC.NE.'EHT3D ') THEN
+         WRITE (ILST,*) 'PSI1 IS NOT SET UP TO DO THE CALCULATIONS ON'
+         WRITE (ILST,*) 'THIS BASIS SET. YOU CAN USE EHT AND EHT3D ONLY'
+         STOP
+      ENDIF
+      IF (AUTO.NE.'AUTO') THEN
+C
+C       READ ABSCISSA AND ORDINATE MIN AND MAX - 0 = AUTO.
+C
+         READ (IRD,30) XMIN,XMAX
+         READ (IRD,30) YMIN,YMAX
+         READ (IRD,30) ZMIN,ZMAX
+      ENDIF
+   30 FORMAT (2F10.6)
+C
+C       OBTAIN PLOTTING DATA FROM DISK
+C
+      IRD1 = IDSK3
+      IF (IONEMO.EQ.1) IRD1 = IRD
+      READ (IRD1,200) ICHG
+	WRITE(*,*)' CHARGE = ',ICHG
+      NOEL = -ICHG
+      N = 0
+      NBASIS = 0
+      NAT = 0
+      NDCALS = 0
+C
+C       READ COORDINATES AND DETERMINE NORMALIZING FACTORS FOR AOS.
+C       THE FORM OF THE SLATER ORBITALS MAY BE FOUND IN I.G. CSIZMADIA,
+C       THEORY AND PRACTICE OF MO CALCULATIONS,ELSEVIER,1976, P 313.
+C
+   40 NAT = NAT+1
+      READ (IRD1,50) IN,(C(NAT,J),J=1,3)
+	WRITE(*,*)' ATOM ',IN,(C(NAT,J),J=1,3)
+   50 FORMAT (I2,8X,3F10.6)
+      IF (IN.NE.99) THEN
+         IAN(NAT) = IN
+         N3FLG = 0
+         IF (IN.LE.2) THEN
+            N = N+1
+            NBASIS = NBASIS+2
+            NOEL = NOEL+IN
+            RNORM(N) = SQRT((Z1S(IN)**3)/PI)
+            GO TO 40
+         ENDIF
+         IF (WFTYP.EQ.1) THEN
+            NOEL = NOEL+2
+            N = N+1
+            RNORM(N) = SQRT((Z1S(IN)**3)/PI)
+         ENDIF
+         IF (IN.GE.11) THEN
+            IF (WFTYP.EQ.0) GO TO 80
+         ENDIF
+         NOEL = NOEL+8
+         IF (IN.LT.11) NOEL = NOEL-10+IN
+         RN = SQRT((Z2SP(IN)**5)/PI)
+         N = N+1
+         RNORM(N) = RN/RT3
+   60    DO 70 I = 1, 3
+            N = N+1
+            RNORM(N) = RN
+   70    CONTINUE
+         IF (N3FLG.EQ.1) GO TO 90
+         IF (IN.LT.11) GO TO 40
+   80    IF (IN.GT.18) GO TO 110
+         IN = IN-10
+         NOEL = NOEL+IN
+         N = N+1
+         RNORM(N) = SQRT(2.*(Z3S(IN)**7)/(45.*PI))
+         RN = SQRT(2.*(Z3P(IN)**7)/(15.*PI))
+         N3FLG = 1
+         GO TO 60
+   90    IF (IN.LT.4) GO TO 40
+         IF (N3D.EQ.0) GO TO 40
+         RN = SQRT(2.*(Z3D(IN)**7)/(3.*PI))
+         DO 100 I = 1, 5
+            N = N+1
+            RNORM(N) = RN
+  100    CONTINUE
+         I = N-4
+         RNORM(I) = RN*0.5/RT3
+         I = N-1
+         RNORM(I) = RN*0.5
+         GO TO 40
+  110    CALL DORBIT (IN,N,NOEL,NAT,IRD1)
+         GO TO 40
+      ENDIF
+      NAT = NAT-1
+      CALL DRAMNP (C,NAT,CO,ICM,CMIN,CMAX)
+C
+C       CONVERT COORDINATES TO ATOMIC UNITS
+C
+C     IT'S FASTER TO MULTIPLY THAN TO DIVIDE ON MOST COMPUTERS
+C
+      AUINV = 1.0/AU
+      DO 130 I = 1, NAT
+         DO 120 J = 1, 3
+            C(I,J) = C(I,J)*AUINV
+  120    CONTINUE
+  130 CONTINUE
+	WRITE(*,*)' ATOM ',IN,(C(NAT,J),J=1,3)
+C
+C       NAT=NO. OF ATOMS% NOEL=NO. OF ELECTRONS% N= NO.
+C       OF BASIS FUNCTIONS.
+C       NORB=1,2 FOR ORBITAL VALUES OR CHARGE DENSITIES
+C
+      NMO = (NOEL+1)/2
+C
+C       READ IN EIGENVECTORS
+C       IT IS ASSUMED THAT THE EIGENVECTORS HAVE BEEN NORMALIZED TO 1
+C       ELECTRON WITH THE OVERLAP MATRIX INCLUDED.
+C
+C       ALTHOUGH THIS DOES NOT APPEAR NECESSARY - JOHNN J. NASH 4/29/90
+C
+      WRITE (ILST,140) N,NAT,NOEL
+  140 FORMAT (' NBASIS = ',I3,' NATOMS = ',I3,' NOEL = ',I3)
+      IF (IONEMO.NE.0) THEN
+         READ (IRD,150) (V(I,1),I=1,N)
+	 WRITE(*,*)' EIGENVECTORS ',(V(I,1),I=1,N)
+      ELSE
+         READ (IDSK3,150) ((V(I,J),I=1,N),J=1,N)
+  150    FORMAT (8f10.6)
+      ENDIF
+C
+C       ESTABLISH MO OCCUPANCIES. THESE MAY ALSO BE READ
+C       IN FOR OPEN SHELLS
+C
+C
+C       READ IN MONE AND MOLAST
+C
+      READ (IRD,190) MONE,MOLAST,SCALE
+	WRITE(*,*)' MONE,MOLAST,SCALE ',MONE,MOLAST,SCALE
+  190 FORMAT (2I2,F10.6)
+C
+C       READ THE NO. OF CONTOURS AND THEN THE LEVELS.
+C
+      READ (IRD,200) NCT,ICONN,ICONZ,NORB
+	WRITE(*,*)' NCT,ICONN,ICONZ,NORB ',NCT,ICONN,ICONZ,NORB
+  200 FORMAT (4I2)
+      READ (IRD,210) (CTR(I),I=1,NCT)
+	WRITE(*,*)' CTR ',CTR(1)
+  210 FORMAT (8F10.6)
+C
+C       DEFAULT VALUES
+C
+      IF (MONE.EQ.0) MONE = 1
+      IF (MOLAST.EQ.0) MOLAST = NMO
+      IF (IONEMO.EQ.1) MOLAST = 1
+      IF (SCALE.EQ.0.0) SCALE = 1.0
+      NUM = MOLAST-MONE+1
+C
+C       DEFAULT VALUES
+C
+      IF (NCT.EQ.0) CTR(1) = 0.075
+      IF (NCT.EQ.0) NCT = 1
+      IF (NORB.EQ.0) NORB = 1
+      IF (NORB.EQ.1) ICONN = 1
+      WRITE (ILST,20) CALC,IONEMO,NORB,IRDPOP
+   20 FORMAT (' CALC = ',1A6,' IONEMO = ',I2,' NORB = ',I2,' IRDPOP=',
+     *   I2)
+C
+C       NORMALIZE MO S TO PROPER OCCUPANCIES
+C
+C       THIS WILL NOW BE DONE AT THE END SO MO'S CAN BE SIMULTANEOUSLY
+C       BE PLOTTED, IMPOSSIBLE IF IT'S DONE HERE
+C
+C            DO 180 I = 1, N
+C               FACT = SQRT(OCMO(I))
+C               DO 170 J = 1, N
+C                  V(J,I) = FACT*V(J,I)
+C  170          CONTINUE
+C  180       CONTINUE
+C         ENDIF
+C       ENDIF
+C
+C       GREATER RESOLUTION IS OBTAINABLE BY INCREASING THE
+C       SIZE OF MXPTS WHICH IS THE DIMENSIONS OF THE DENSITY
+C       OR ORBITAL VALUE ARRAY. OF COURSE, THE DIMENSION
+C       STATEMENTS WILL ALSO HAVE TO BE APPROPRIATELY FIXED.
+C        MXPTS MUST BE ODD.
+C
+C      MXPTS = 51
+C	see the parameter statement at top for this parameter
+C
+      SPACES = FLOAT(MXPTS-1)*AU
+C
+C       DETERMINE DEFAULT PLANES
+C
+C
+C       DETERMINE DEFAULT RANGES, IF XMIN = 0. INCREASING SCALE
+C       INCREASES THE RANGE OF THE PLOT.
+C
+	WRITE(*,*)' AUTO, SCALE ',AUTO,SCALE
+      IF (AUTO.EQ.'AUTO') THEN
+         R = 1.3*SCALE
+         XMIN = CMIN(1)-R
+         YMIN = CMIN(2)-R
+         XMAX = CMAX(1)+R
+         YMAX = CMAX(2)+R
+         ZMIN = CMIN(3)-R
+         ZMAX = CMAX(3)+R
+      ENDIF
+      XMI = XMIN/AU
+      YMI = YMIN/AU
+      ZMI = ZMIN/AU
+      XINC = (XMAX-XMIN)/SPACES
+      YINC = (YMAX-YMIN)/SPACES
+      ZINC = (ZMAX-ZMIN)/SPACES
+      WRITE (ILST,220) 'X',XMIN,XMAX,'Y',YMIN,YMAX,'Z',ZMIN,ZMAX
+  220 FORMAT ('0',3(2X,A1,2F10.4))
+C
+C       SYMMETRY SET-UP
+C
+      ISFLAG = 0
+C      MXXPTS = MXPTS
+C
+C       MAKE A MAP FOR EACH SLICE
+C
+      IF (CALC.EQ.'EHT   '.OR.CALC.EQ.'EHT3D ') THEN
+         CALL EHTMO (N3D)
+      ELSE
+         WRITE (*,*) ' NO COMPUTATIONS DONE'
+      ENDIF
+      RETURN
+      END
+C
+C
+      SUBROUTINE DRAMNP (C,NAT,CO,ICM,CMIN,CMAX)
+      DIMENSION C(50,3),CO(3),CMIN(3),CMAX(3)
+C
+C       THIS ROUTINE DETERMINES CO AND CM WHICH ARE USED
+C       FOR AUTOMATIC SCALING OF PLOTTING AREAS
+C
+C       THE ROUTINE WAS ADAPTED FROM THE ROUTINE CALLED
+C       DRAMOL WHICH IS USED IN THE HIDDEN LINE PART OF
+C       THE PROGRAM
+C
+      CM = -100.
+      DO 20 I = 1, 3
+         CMI = 100.
+         CMA = -100.
+         DO 10 J = 1, NAT
+            P = C(J,I)
+            CMI = MIN(CMI,P)
+            CMA = MAX(CMA,P)
+   10    CONTINUE
+         CO(I) = (CMA+CMI)/2.
+         CMIN(I) = CMI
+         CMAX(I) = CMA
+         P = CMA-CMI
+         IF (P.GT.CM) THEN
+            ICM = I
+            CM = P
+         ENDIF
+   20 CONTINUE
+      RETURN
+      END
+C
+C
+      SUBROUTINE DORBIT (IN,N,NOEL,NAT,IRD)
+      PARAMETER (MXPTS=41)
+C
+C        SETS UP D ORBITALS
+C        J. GAO, JAN., 1986
+C
+C        COEFFECIENTS OF ORBITALS :
+C         NS = SQRT( (2ZS)^(2N+1)/(4(2N)!*PI) )  * R^(N-1)EXP(-ZSR)
+C
+C         NP = SQRT( 3(2ZP)^(2N+1)/(4(2N)!*PI) ) * R^(N-2)EXP(-ZPR)X
+C
+C         ND = SQRT( 15(2ZD)^(2N+1)/(4(2N)!*PI) ) --- AND ADJUSTMENTS
+C                                                     FOR EACH D'S
+C
+      COMMON /DENS/ DENS(MXPTS,MXPTS,MXPTS),CONTR(100),RAD(100)
+     * ,RNORM(100),V(100,100),C(50,3),IAN(49),RCUT(18),OCMO(100)
+      COMMON /DORB/ NSHELL(25),ZTS(25),ZTP(25),ZTD(25,2),DCONST(25,2),
+     *   RRNORM(100)
+      DIMENSION ZD(2),CD(2)
+      DATA PI,RT3 / 3.1415926536,1.7320508 /
+C
+      READ (IRD,10) SYM,NVLE,NS,ZS,NP,ZP,ND,ZD(1),CD(1),ZD(2),CD(2)
+   10 FORMAT (A2,I3,I3,F6.3,I3,F6.3,I3,F6.3,F6.4,F6.3,F6.4)
+      NSHELL(NAT) = ND
+      ZTS(NAT) = ZS
+      ZTP(NAT) = ZP
+      ZTD(NAT,1) = ZD(1)
+      ZTD(NAT,2) = ZD(2)
+      DCONST(NAT,1) = CD(1)
+      DCONST(NAT,2) = CD(2)
+      NOEL = NOEL+NVLE
+      N = N+1
+      IF (NS.LT.3.OR.NP.LT.3.OR.ND.LT.3) THEN
+         WRITE (*,*) ' PROGRAM STOPPED IN SUBROUTINE DORBIT'
+         STOP
+      ENDIF
+      GO TO (20,20,20,30,40,50), NS
+   20 RNORM(N) = SQRT(2.*ZS**7/(45.*PI))
+      GO TO 60
+   30 RNORM(N) = SQRT(ZS**9/(315.*PI))
+      GO TO 60
+   40 RNORM(N) = SQRT(2.*ZS**11/(14175.*PI))
+      GO TO 60
+   50 RNORM(N) = SQRT(2.*ZS**13/(467775.*PI))
+   60 GO TO (70,70,70,90,110,130), NP
+   70 RN = SQRT(2.*ZP**7/(15.*PI))
+      DO 80 I = 1, 3
+         N = N+1
+         RNORM(N) = RN
+   80 CONTINUE
+      GO TO 150
+   90 RN = SQRT(ZP**9/(105.*PI))
+      DO 100 I = 1, 3
+         N = N+1
+         RNORM(N) = RN
+  100 CONTINUE
+      GO TO 150
+  110 RN = SQRT(2.*ZP**11/(4725.*PI))
+      DO 120 I = 1, 3
+         N = N+1
+         RNORM(N) = RN
+  120 CONTINUE
+      GO TO 150
+  130 RN = SQRT(2.*ZP**13/(155925.*PI))
+      DO 140 I = 1, 3
+         N = N+1
+         RNORM(N) = RN
+  140 CONTINUE
+  150 GO TO (160,160,160,180,200), ND
+  160 RN = SQRT(2.*ZD(1)**7/(3.*PI))
+      RRN = SQRT(2.*ZD(2)**7/(3.*PI))
+      DO 170 I = 1, 5
+         N = N+1
+         RNORM(N) = RN
+         RRNORM(N) = RRN
+  170 CONTINUE
+      I = N-4
+      RNORM(I) = RNORM(I)*0.5/RT3
+      RRNORM(I) = RRNORM(I)*0.5/RT3
+      I = N-1
+      RNORM(I) = 0.5*RNORM(I)
+      RRNORM(I) = 0.5*RRNORM(I)
+      GO TO 220
+  180 RN = SQRT(ZD(1)**9/(21.*PI))
+      RRN = SQRT(ZD(2)**9/(21.*PI))
+      DO 190 I = 1, 5
+         N = N+1
+         RNORM(N) = RN
+         RRNORM(N) = RRN
+  190 CONTINUE
+      I = N-4
+      RNORM(I) = 0.5*RNORM(I)/RT3
+      RRNORM(I) = 0.5*RNORM(I)/RT3
+      I = I-1
+      RNORM(I) = 0.5*RNORM(I)
+      RRNORM(I) = 0.5*RRNORM(I)
+      GO TO 220
+  200 RN = SQRT(2.*ZD(1)**11/(945.*PI))
+      RRN = SQRT(2.*ZD(2)**11/(945.*PI))
+      DO 210 I = 1, 5
+         N = N+1
+         RNORM(N) = RN
+         RRNORM(N) = RRN
+  210 CONTINUE
+      I = N-4
+      RNORM(I) = 0.5*RNORM(I)/RT3
+      RRNORM(I) = 0.5*RRNORM(I)/RT3
+      I = I-1
+      RNORM(I) = RNORM(I)*0.5
+      RRNORM(I) = RRNORM(I)*0.5
+  220 CONTINUE
+      RETURN
+      END
+C
+      SUBROUTINE EHTMO (N3D)
+C
+      PARAMETER (MXPTS=41)
+      COMMON /DORB/ NSHELL(25),ZTS(25),ZTP(25),ZTD(25,2),DCONST(25,2),
+     *   RRNORM(100)
+      COMMON /SPLIT/ XMI,YMI,ZMI,XINC,YINC,ZINC,MONE,MOLAST,NORB,NOCUT,
+     *   NAT
+      COMMON /DENS/ DENS(MXPTS,MXPTS,MXPTS),CONTR(100),RAD(100),
+     *   RNORM(100),V2(100,100),C(50,3),IAN(49),RCUT(18),OCMO(100)
+      COMMON /MINMAX/ XMIN,XMAX,YMIN,YMAX,ZMIN,ZMAX
+      COMMON /EHT/ Z1S(18),Z2SP(18),Z3S(8),Z3P(8),Z3D(8)
+      COMMON /IO/ IRD,ILST,IDSK1,IDSK2,IDSK3
+      DIMENSION XDEL(MXPTS),YDEL(MXPTS),ZDEL(MXPTS)
+      DIMENSION XDELSQ(MXPTS),YDELSQ(MXPTS),ZDELSQ(MXPTS)
+      DIMENSION PTMP(MXPTS,3),V(100,100)
+      DIMENSION YDELRSQ(MXPTS),IND(100),X(MXPTS),Y(MXPTS),Z(MXPTS)
+      DIMENSION TMPYZ(MXPTS)
+C
+C       THIS SUBROUTINE IS A SIMPLIFIED VERSION OF THE DENSITY
+C       COMPUTATION SECTION OF PSI77.
+C       THIS ROUTINE ONLY CALCULATES EHT(3D) TYPE MO'S, THUS REMOVING
+C       THE LARGE NUMBER OF IF - GOTO'S IN THE ORIGINAL.
+C
+C       THE PURPOSE FOR SPLITTING IT INTO SEPARATE MODULES IS SIMPLE,
+C       THERE IS NO REASON TO CHECK EACH TIME THROUGH THE LOOP WHICH
+C       TYPE OF WAVE FUNCTION IS BEING USED, ONCE YOU KNOW IT'S EHT(3D)
+C       IT'S NEVER GOING TO CHANGE DURING THE PROGRAM RUN.
+C                                       DAN SEVERANCE 9/3/87
+C
+      NOCUT = 0
+      DO 10 NZZ = 1, MXPTS
+         DO 10 NY = 1, MXPTS
+            DO 10 NX = 1, MXPTS
+               DENS(NX,NY,NZZ) = 0.0
+   10 CONTINUE
+      WRITE (*,*) ' MXPTS ',MXPTS
+      X(1) = XMI
+      Y(1) = YMI
+      Z(1) = ZMI
+      DO 20 I = 2, MXPTS
+         X(I) = XINC+X(I-1)
+         Y(I) = YINC+Y(I-1)
+         Z(I) = ZINC+Z(I-1)
+   20 CONTINUE
+      NAO = 0
+      Do 501 NS = 1,nat
+	in = ian(ns)
+        IF( IN .LT. 2 ) THEN
+           NAO = NAO + 1
+	ELSEIF(IN .LT. 18) THEN
+           NAO = NAO + 4
+        ELSEIF(IN .GT. 18) THEN
+           NAO = NAO + 9
+	ENDIF
+ 501  CONTINUE
+      do 589 m=1,na0
+        write(*,*)' rnorm(',m,') = ',rnorm(m)
+ 589  continue
+      DO 500 MO=MONE,MOLAST
+         DO 500 M = 1, NAO
+            V(M,MO) = V2(M,MO)*RNORM(M)
+ 500  CONTINUE
+      M = 1
+      MO = MONE
+      DO 250 NS = 1, NAT
+         VTMP = V(M,MO)
+         IN = IAN(NS)
+         WRITE (*,*) ' NS, IAN(NS) ',NS,IN
+C
+C       RCUT CONTAINS THE DISTANCES BEYOND WHICH THE RADIAL PART
+C       OF THE MOST DIFFUSE AO FOR AN ATOM IS .LT. .0005 AU. FOR
+C       NORMAL CONTOUR LEVELS (.GT. .01 AU) SUCH CONTRIBUTIONS ARE
+C       NEGLIGIBLE. THIS FEATURE IS DISABLED BY NOCUT.
+C
+C         IF (NOCUT.EQ.1.OR.R(NS).LE.RCUT(IN)) THEN
+C  DISABLED FOR NOW
+C
+         c3 = c(ns,3)
+         c2 = c(ns,2)
+         c1 = c(ns,1)
+         DO 30 NXYZ = 1, MXPTS
+            ZDEL(NXYZ) = Z(NXYZ)-C3
+            ZDELSQ(NXYZ) = ZDEL(NXYZ)*ZDEL(NXYZ)
+   30    CONTINUE
+         DO 32 NXYZ = 1, MXPTS
+            YDEL(NXYZ) = Y(NXYZ)-C2
+            YDELSQ(NXYZ) = YDEL(NXYZ)*YDEL(NXYZ)
+   32    CONTINUE
+         DO 33 NXYZ = 1, MXPTS
+            XDEL(NXYZ) = X(NXYZ)-C1
+            XDELSQ(NXYZ) = XDEL(NXYZ)*XDEL(NXYZ)
+   33    CONTINUE
+         IF (IN.LE.2) THEN
+            Z1SIN = -Z1S(IN)
+            DO 90 NZ = 1, MXPTS
+               ZDSQ = ZDELSQ(NZ)
+               DO 80 NY = 1, MXPTS
+                  YDRSQ = YDELSQ(NY)+ZDSQ
+                  DO 50 NX = 1, MXPTS
+                     R = XDELSQ(NX)+YDRSQ
+                     R = SQRT(R)
+                     R = EXP(Z1SIN*R)
+                     DENS(NX,NY,NZ) = DENS(NX,NY,NZ)+R*VTMP
+   50             CONTINUE
+   80          CONTINUE
+   90       CONTINUE
+            M = M+1
+         ELSEIF (IN.LE.10) THEN
+C
+C                  2S AND 2P ORBITALS
+C
+            Z2SPIN = -Z2SP(IN)
+            VTMPX = V(M+1,MO)
+            VTMPY = V(M+2,MO)
+            VTMPZ = V(M+3,MO)
+            DO 100 NXYZ = 1, MXPTS
+               PTMP(NXYZ,1) = VTMPX*XDEL(NXYZ)
+               PTMP(NXYZ,2) = VTMPY*YDEL(NXYZ)
+               PTMP(NXYZ,3) = VTMPZ*ZDEL(NXYZ)
+  100       CONTINUE
+            DO 170 NZ = 1, MXPTS
+               ZDSQ = ZDELSQ(NZ)
+               TMPP = PTMP(NZ,3)
+               DO 160 NY = 1, MXPTS
+                  YDRSQ = YDELSQ(NY)+ZDSQ
+		  tmp = PTMP(NY,2) + TMPP
+                  DO 120 NX = 1, MXPTS
+                     RSQ2 = XDELSQ(NX)+YDRSQ
+                     R = SQRT(RSQ2)
+                     RADPS = EXP(Z2SPIN*R)
+                     DENS(NX,NY,NZ) = DENS(NX,NY,NZ)+RADPS*
+     *                 (PTMP(NX,1)+TMP )
+                     RADPS = RADPS*R
+                     DENS(NX,NY,NZ) = DENS(NX,NY,NZ)+RADPS*VTMP
+  120             CONTINUE
+C
+C   The next and previous code was changed such that RADP(NX) has the
+C   exponent only to start, then rad = radp*r, instead of :
+C   Rad = exp
+C   radp = rad * (stuff moved into PTMP)
+C   rad = rad *(stuff moved into Vtmp)
+C
+C   Now V is premultiplied by the Rnorm factor, only PTMP need calc. to
+C   Include Xdel,Ydel, and Zdel
+C
+  160          CONTINUE
+  170       CONTINUE
+            M = M+4
+         ELSEIF (IN.LE.18) THEN
+            IN = IN - 10
+C
+C                  3S AND 3P ORBITALS
+C
+            Z3SIN = -Z3S(IN)
+            Z3PIN = -Z3P(IN)
+            VTMPX = V(M+1,MO)
+            VTMPY = V(M+2,MO)
+            VTMPZ = V(M+3,MO)
+            DO 1001 NXYZ = 1, MXPTS
+               PTMP(NXYZ,1) = VTMPX*XDEL(NXYZ)
+               PTMP(NXYZ,2) = VTMPY*YDEL(NXYZ)
+               PTMP(NXYZ,3) = VTMPZ*ZDEL(NXYZ)
+ 1001       CONTINUE
+            DO 1701 NZ = 1, MXPTS
+               ZDSQ = ZDELSQ(NZ)
+               TMPP = PTMP(NZ,3)
+               DO 1601 NY = 1, MXPTS
+                  YDRSQ = YDELSQ(NY)+ZDSQ
+		  tmp = PTMP(NY,2) + TMPP
+                  DO 1201 NX = 1, MXPTS
+                     RSQ2 = XDELSQ(NX)+YDRSQ
+                     R = SQRT(RSQ2)
+                     RADS = EXP(Z3SIN*R)
+                     RADS = RADS * RSQ2
+                     DENS(NX,NY,NZ) = DENS(NX,NY,NZ)+RADS*VTMP
+                     RADP = EXP(Z3PIN*R)
+                     RADP = RADP * R
+                     DENS(NX,NY,NZ) = DENS(NX,NY,NZ)+RADP*
+     *                 (PTMP(NX,1)+TMP )
+1201             CONTINUE
+C
+C   The next and previous code was changed such that RADP(NX) has the
+C   exponent only to start, then rad = radp*r, instead of :
+C   Rad = exp
+C   radp = rad * (stuff moved into PTMP)
+C   rad = rad *(stuff moved into Vtmp)
+C
+C   Now V is premultiplied by the Rnorm factor, only PTMP need calc. to
+C   Include Xdel,Ydel, and Zdel
+C
+ 1601          CONTINUE
+ 1701       CONTINUE
+            M = M+4
+        ELSE
+            DO 1702 NZ = 1, MXPTS
+               ZDSQ = ZDELSQ(NZ)
+               DO 1602 NY = 1, MXPTS
+                  YDRSQ = YDELSQ(NY)+ZDSQ
+                  DO 1202 NX = 1, MXPTS
+                     RSQ2 = XDELSQ(NX)+YDRSQ
+                     R = SQRT(RSQ2)
+                     CALL MOCALC(IN,M,NS,XDEL(NX),YDEL(NY),ZDEL(NZ)
+     *                   ,DENVAR,R)
+                     DENS(NX,NY,NZ) = DENS(NX,NY,NZ)+DENVAR
+ 1202            CONTINUE
+ 1602          CONTINUE
+ 1702       CONTINUE
+            M = M + 9
+	ENDIF
+  250 CONTINUE
+      OPEN(17,FORM='UNFORMATTED',STATUS='NEW')
+      WRITE(17)MXPTS,NAT
+      WRITE(17)(IAN(I),I=1,NAT)
+      WRITE(17)((C(I,J),J=1,3),I=1,NAT)
+      WRITE(17)(((DENS(NX,NY,NZ),NX=1,MXPTS),NY=1,MXPTS),NZ=1,MXPTS)
+      WRITE(17)XMIN,XMAX,YMIN,YMAX,ZMIN,ZMAX
+      CLOSE(17)
+      RETURN
+      END
+C
+C
+      SUBROUTINE MOCALC (IN,M,NS,XDEL,YDEL,ZDEL,CONTR,R)
+C
+C        EVALUATES SLATER TYPE ORBITALS
+C        J. GAO, JAN., 1986
+C
+C        VALENCE ORBITALS ARE: (3D,4S,4P), (4D,5S,5P), & (5D,6S,6P)
+C
+      PARAMETER(MXPTS=41)
+      COMMON /SPLIT/ XMI,YMI,ZMI,XINC,YINC,ZINC,MONE,MOLAST,NORB,NOCUT,
+     *   NAT
+      COMMON /DENS/ DENS(MXPTS,MXPTS,MXPTS),JUNK(100),RAD(100),
+     *   RNORM(100),V(100,100),C(50,3),IAN(49),RCUT(18),OCMO(100)
+      COMMON /RPLOT/ NNN,CO(3),CM,THE,GAM,PHI,XX,YY,ZZ,IDASH,SCALE,PERZ,
+     *   KA,KO,ZZZ
+      COMMON /DORB/ NSHELL(25),ZTS(25),ZTP(25),ZTD(25,2),DCONST(25,2),
+     *   RRNORM(100)
+      DIMENSION XX(850),YY(850),ZZ(850)
+C
+      ND = NSHELL(NS)
+      GO TO (10,10,10,20,30) ND
+   10 RR = R*R
+      RADS = RR*R*RNORM(M)*EXP(-ZTS(NS)*R)
+      RADP = RR*RNORM(M+1)*EXP(-ZTP(NS)*R)
+      RADD1 = EXP(-ZTD(NS,1)*R)
+      RADD2 = EXP(-ZTD(NS,2)*R)
+      GO TO 40
+   20 RR = R*R
+      RADS = RR*RR*RNORM(M)*EXP(-ZTS(NS)*R)
+      RADP = RR*R*RNORM(M+1)*EXP(-ZTP(NS)*R)
+      RADD1 = R*EXP(-ZTD(NS,1)*R)
+      RADD2 = R*EXP(-ZTD(NS,2)*R)
+      GO TO 40
+   30 RR = R*R
+      RADS = RR*RR*R*RNORM(M)*EXP(-ZTS(NS)*R)
+      RADP = RR*RR*RNORM(M+1)*EXP(-ZTP(NS)*R)
+      RADD1 = RR*EXP(-ZTD(NS,1)*R)
+      RADD2 = RR*EXP(-ZTD(NS,2)*R)
+  40  CONTR = V(M,MONE)*RADS
+      CONTR = CONTR+V(M+1,MONE)*XDEL*RADP
+      CONTR = CONTR+V(M+2,MONE)*YDEL*RADP
+      CONTR = CONTR+V(M+3,MONE)*ZDEL*RADP
+      MJ = M+4
+      CONTR = CONTR+V(MJ,MONE)*(XDEL**2-YDEL**2)*(DCONST(NS,
+     *   1)*RNORM(MJ)*RADD1+DCONST(NS,2)*RRNORM(MJ)*RADD2)
+      MJ = M+5
+      CONTR = CONTR+V(MJ,MONE)*(3.*ZDEL**2-R*R)*(DCONST(NS,1)*
+     *  RNORM(MJ)*RADD1+DCONST(NS,2)*RRNORM(MJ)*RADD2)
+      MJ = M+6
+      CONTR = CONTR+V(MJ,MONE)*XDEL*YDEL*(DCONST(NS,1)*RNORM
+     *   (MJ)*RADD1+DCONST(NS,2)*RRNORM(MJ)*RADD2)
+      MJ = M+7
+      CONTR = CONTR+V(MJ,MONE)*XDEL*ZDEL*(DCONST(NS,1)*RNORM
+     *   (MJ)*RADD1+DCONST(NS,2)*RRNORM(MJ)*RADD2)
+      MJ = M+8
+      CONTR = CONTR+V(MJ,MONE)*YDEL*ZDEL*(DCONST(NS,1)*RNORM
+     *   (MJ)*RADD1+DCONST(NS,2)*RRNORM(MJ)*RADD2)
+      RETURN
+      END
