@@ -100,7 +100,7 @@ C  *                                                                 *
 C  *   OTHER PARAMETERS WHICH MUST BE ADJUSTED ARE0                  *
 C  *                                                                 *
 C  *   DEL1 = ETA/1.D2, DELTA = ETA**2*1.D2, SMALL = ETA**2/1.D2,    *
-C  *   DELBIG = THETA*DELTA/1.D3, THETA1 = 1.D3/THETA, EMAG = ETA,   *
+C  *   DELBIG = THETA*DELTA/1.D3, THETA1 = 1.D0/THETA, EMAG = ETA,   *
 C  *   TOLER = 1.D2*DSQRT(ETA)                                       *
 C  *                                                                 *
 C  *   TOLER IS A FACTOR USED TO DETERMINE IF ANY ROOTS ARE CLOSE    *
@@ -112,13 +112,17 @@ C  *                                                                 *
 C  *   EMAG IS A TOLERANCE FOR NEGLIGIBLE ELEMENTS IN THE QR         *
 C  *   ITERATION FOR EIGENVECTORS FOR DEGENERATE EIGENVALUES.        *
 C  *                                                                 *
-C  *   IN THE FOLLOWING ROUTINE, ETA = 1.D-16 AND THETA = 1.D75.     *
-C  *                                                                 *
 C  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 C
-      DATA ETA/1.D-16/,THETA/1.D38/,DEL1/1.D-18/,DELTA/1.D-30/,
-     *SMALL/1.D-34/,DELBIG/1.D05/,THETA1/1.D-38/,TOLER/1.D-6/,
+C  IN THE FOLLOWING ROUTINE, ETA = 1.D-16 AND THETA = 1.D75.
+*     DATA ETA/1.D-16/,THETA/1.D38/,DEL1/1.D-18/,DELTA/1.D-30/,
+*    *SMALL/1.D-34/,DELBIG/1.D05/,THETA1/1.D-38/,TOLER/1.D-6/,
+*    *EMAG/1.D-16/
+C  IN THE FOLLOWING ROUTINE, ETA = 1.D-16 AND THETA = 1.D307.
+      DATA ETA/1.D-16/,THETA/1.D307/,DEL1/1.D-18/,DELTA/1.D-30/,
+     *SMALL/1.D-34/,DELBIG/1.D274/,THETA1/1.D-307/,TOLER/1.D-6/,
      *EMAG/1.D-16/
+C
       N = NX
       FLOATN = DFLOAT(N)
       NROOT = IABS(NROOTX)
