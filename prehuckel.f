@@ -38,6 +38,8 @@ C
      . EXPD2(MAXUSR),C1(MAXUSR),C2(MAXUSR)
       INTEGER*4 NUMAT,NORBS,NELECS,HOMO,NAT,LUMO,ICHG,VELEC,NUSER,HOMO2
       CHARACTER*72 SUBTIT,TITLE
+      Character*80 AMO
+      Integer AtoI
       DATA ATS/'K ','Ca','Sc','Ti','V ','Cr','Mn','Fe','Co','Ni',
      . 'Cu','Zn','Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y ','Zr',
      . 'Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te',
@@ -88,7 +90,13 @@ C
      *  ' The LUMO is MO number ',LUMO
       WRITE(*,*)
       WRITE (*,'(A,$)') ' WHICH MO DO YOU WISH TO PLOT? '
-      READ (*,*) IMO
+      READ (*,'(A5)') AMO
+      Call UpCase(AMO)
+      IMO = -1
+      If (AMO.EQ.'HOMO') IMO = HOMO2
+      If (AMO.EQ.'LUMO') IMO = LUMO
+      If (IMO.EQ.-1) IMO = AtoI(AMO)
+      Write(*, '('' Selected MO is '',I5)') IMO
       IF (IMO.LT.0.OR.IMO.GT.NORBS) GO TO 20
 C
 C WRITE PSI1EHT INPUT FILE
@@ -176,5 +184,42 @@ C
       WRITE (10,'(A)') '02'
       STOP
       END
+
+      Integer Function AtoI(A)
+      Character*80 A
+      Integer I, J, K
+      Integer Zero, Nine
+      Logical IsNumber
+      Zero = IChar('0')
+      Nine = IChar('9')
+      IsNumber = .FALSE.
+      J = 0
+      Do I = 1, 80
+          K = IChar(A(I:I))
+          If (K.GE.Zero.AND.K.LE.Nine) Then
+              J = J * 10 + K - Zero
+              IsNumber = .True.
+          Else If (IsNumber) Then
+              Goto 100
+          End If
+      End Do
+
+ 100  AtoI = J
+      Return
+      End
+
+      Subroutine UpCase(KeyWrd)
+      Character*80 KeyWrd
+      ICapA = IChar('A')
+      ILowA = IChar('a')
+      ILowZ = IChar('z')
+      Do I=1, 80
+         ILine = IChar(KeyWrd(I:I))
+         If (ILine.GE.ILowA.AND.ILine.LE.ILowZ) Then
+            KeyWrd(I:I) = CHAR(ILine + ICapA - ILowA)
+         EndIf
+      End Do
+      Return
+      End
 C
 C
