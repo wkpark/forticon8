@@ -76,8 +76,8 @@ C
                     VALUE4=BINCOE(IBB,I2)*VALUE3
                     DO I1=1,IAB
                       TERM=VALUE4*BINCOE(IAB,I1)
-                      IR=I1+I2+IEB+IEB-I6-I6-I3+IDB-I4+ICB-1
-                      IP=IAB-I1+IBB-I2+IEB+IEB-I5-I5+ICB-I3+IDB-I4+1
+                      IR=IEB+IEB+ICB+IDB-I3-I4-I6-I6        +I2-1+I1
+                      IP=IEB+IEB+ICB+IDB-I3-I4-I5-I5+IAB+IBB-I2+1-I1
                       VALUE=VALUE+A(IP)*B(IR)*TERM
                     End Do
                   End Do
