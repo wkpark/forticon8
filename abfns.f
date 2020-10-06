@@ -41,53 +41,87 @@ C
 C
 C    USE THE DSINH ROUTINE INSTEAD OF SUMMING THE INFINITE SERIES.
 C
-      R=2.D0*DSINH(RHO2)
+      !R=2.D0*DSINH(RHO2)
+      R=D-H
 C
 C    AS MANY SUCCESSIVE B-FUNCTIONS ARE GENERATED FROM B-0 BY THE
 C    RECURRENCE FORMULAE AS ACCURACY WILL PERMIT.
 C
+C    pt >> k case. (RHO2 >> K): Upward recursion.
+C    pt << k case. (RHO2 << K): Downward recursion.
+C
+C    Please See JCP.,24,201
+C    (See also IJQC 67,199-204 (1998) p202)
+C
+C    IJQC 63 843(1997) p849.
+C    * Upward recursion: from Eq. 50a
+C      B(K) = [K*B(K-1) + (-1)**K*EXP(RHO)-EXP(-RHO)]/RHO
+C      * Note: 0-based index
+C      B(K) = [(K-1)*B(K-1) + (-1)**(K-1)*EXP(RHO)-EXP(-RHO)]/RHO
+C      * Note: 1-based index
+C    * Downward recursion:
+C      B(K-1) = [B(K)*RHO - (-1)**(K-1)*EXP(RHO)+EXP(-RHO)]/(K-1)
+C
       B(1)=R/RHO2
-      DO I=2,IX,IS
-        IF(IR.NE.0) Then
+      If (IX.LE.RHO2) Then
 C
-C    MODIFICATION TO AVOID EXCEEDING STORAGE LIMITS.
-C    D. WALLACE 04/14/71
+C    Upward recursion case:
 C
-          DO K=I,IX
-            !IF(((-1)**K).LT.0) Then
-            IF(MOD(K,2).NE.0) Then
-              B(K)=( R  +DFLOAT(K-1)*B(K-1))/RHO2
-            Else
-              B(K)=(-D-H+DFLOAT(K-1)*B(K-1))/RHO2
-            End If
-          End Do
-        End If
-        IN=I+IS-1
+        DO K=2,IX
+          B(K)=((-1)**(K-1)*D-H+DFLOAT(K-1)*B(K-1))/RHO2
+        End Do
+        Return
+      End If
+
 C
-C    AFTER THE RECURRENCE FORMULAE HAVE BEEN APPLIED AN APPROPRIATE
-C    NUMBER OF TIMES THE NEXT B-FUNCTION IS OBTAINED BY SUMMATION
-C    OF THE INFINITE SERIES.
+C    Using the following procedure to get the B_k first and
+C    make B_k-1 series with the Downward recursion
+C    for pt << k case. (RHO2 << IX)
 C
-        IF(IN.GT.IX) Return
-        !IF((-1)**IN.GT.0) Then
-        IF(MOD(IN,2).EQ.0) Then
-          TR=RHO2
-          B(IN)=-2.D0*TR/DFLOAT(IN+1)
-          DO J=1,100
-            TR=TR*RHO2**2/DFLOAT((2*J)*(2*J+1))
-            IF(DABS(TR/B(IN)).LE.SMALL) GoTo 51
-            B(IN)=B(IN)-2.D0*TR/DFLOAT(IN+1+2*J)
-          End Do
-        Else
-          TR=1.D0
-          B(IN)=2.D0*TR/DFLOAT(IN)
-          DO J=1,100
-            TR=TR*RHO2**2/DFLOAT((2*J)*(2*J-1))
-            IF(DABS(TR/B(IN)).LE.SMALL) GoTo 51
-            B(IN)=B(IN)+2.D0*TR/DFLOAT(IN+2*J)
-          End Do
-        End If
- 51     CONTINUE
+C    For larger RHO2(beta), Use downward recursion.
+C    a) first, calc B(K), then get B(K-1) recursivly.
+C
+C    The Top B-Function is obtained by summation
+C    of the infinite series.
+C
+      Call GetBk(RHO2,IX,BK,SMALL)
+      B(IX)=BK
+C
+C    After the top B(K) obtained,
+C    get the last B(K-1) series by downward recursion.
+C
+      DO K=IX-1,2,-1
+        BK=(BK*RHO2-(-1)**(K)*D+H)/DFLOAT(K)
+        B(K)=BK
       End Do
       RETURN
       END
+
+      Subroutine GetBk(RHO,K,BK,SMALL)
+      Implicit Real*8 (A-H,O-Z)
+C
+C    The B-Function can be obtained by summation
+C    of the infinite series.
+C
+C    Almost all B_k obtained within ~20 cycles.
+C
+      IF(MOD(K,2).EQ.0) Then
+        TR=RHO
+        BK=-2.D0*TR/DFLOAT(K+1)
+        DO J=1,100
+          TR=TR*RHO**2/DFLOAT((2*J)*(2*J+1))
+          IF(J.GT.5.AND.DABS(TR/BK).LE.SMALL) GoTo 51
+          BK=BK-2.D0*TR/DFLOAT(K+1+2*J)
+        End Do
+      Else
+        TR=1.D0
+        BK=2.D0*TR/DFLOAT(K)
+        DO J=1,100
+          TR=TR*RHO**2/DFLOAT((2*J)*(2*J-1))
+          IF(J.GT.5.AND.DABS(TR/BK).LE.SMALL) GoTo 51
+          BK=BK+2.D0*TR/DFLOAT(K+2*J)
+        End Do
+      End If
+ 51   Continue
+      Return
+      End
