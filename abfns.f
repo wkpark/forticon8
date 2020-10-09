@@ -1,6 +1,5 @@
       SUBROUTINE ABFNS(A,B)
       IMPLICIT REAL*8(A-H,O-Z)
-      PARAMETER (MXUSER=230)
       Parameter (SMALL=1.0D-7)
       DIMENSION A(*),B(*)
       COMMON/LOCLAP/SK1,SK2,RR,L1,L2,M,N1,N2,MAXCAL
@@ -14,7 +13,7 @@ C
 C
 C    IF THE ARGUMENT IS ZERO A SEPARATE FORMULA MUST BE USED.
 C
-        DO I=1,MXUSER
+        DO I=1,J
           A(I)=0.D0
           B(I)=0.D0
         End Do
