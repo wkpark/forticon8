@@ -66,8 +66,10 @@ C
 C
 C    Upward recursion case:
 C
+        ISN = -1
         DO K=2,IX
-          B(K)=((-1)**(K-1)*D-H+DFLOAT(K-1)*B(K-1))/RHO2
+          B(K)=(ISN*D-H+DFLOAT(K-1)*B(K-1))/RHO2
+          ISN = -ISN
         End Do
         Return
       End If
@@ -89,8 +91,10 @@ C
 C    After the top B(K) obtained,
 C    get the last B(K-1) series by downward recursion.
 C
+      ISN=(-1)**(IX-1)
       DO K=IX-1,2,-1
-        BK=(BK*RHO2-(-1)**(K)*D+H)/DFLOAT(K)
+        BK=(BK*RHO2-ISN*D+H)/DFLOAT(K)
+        ISN=-ISN
         B(K)=BK
       End Do
       RETURN
